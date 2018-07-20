@@ -1,0 +1,26 @@
+[general]
+creator=R package 'raster'
+created=2018-07-20 22:01:04
+[georeference]
+nrows=1623
+ncols=1830
+xmin=434995.693160475
+ymin=4347010.14623143
+xmax=478000.693160475
+ymax=4396998.54623143
+projection=+proj=utm +zone=13 +ellps=GRS80 +datum=NAD83 +units=m +no_defs +towgs84=0,0,0
+[data]
+datatype=FLT4S
+byteorder=little
+nbands=1
+bandorder=BIL
+categorical=FALSE
+minvalue=1989.412406109
+maxvalue=4334.74210640792
+nodatavalue=-3.4e+38
+[legend]
+legendtype=
+values=
+color=
+[description]
+layername=elevation
