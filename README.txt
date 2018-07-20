@@ -1,4 +1,4 @@
-The scripts and data files contained in this directory may be used to reproduce the results in Hooten et al. (2018) related to the movement of a mountain lion in Colorado. 
+The scripts and data files contained in this directory may be used to reproduce the results in Hooten et al. (2018) related to the movement of a mountain lion in Colorado. All R scripts are intended to be run with /code/ as the working directory.
 
 The scripts /code/simulate/simulation.R and /code/mountain_lion/fit_mtl_AM80_subset.R use the functions in the included 'reDyn' R package by Henry Scharf.
 
