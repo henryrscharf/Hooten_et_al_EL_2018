@@ -203,8 +203,6 @@ save(lds_FULL_mat,
 ## fixed ----
 fixed <- list(
   "z", "g0", "theta",
-  # "mu",
-  # "sigsq_s",
   "alpha", "gmax"
 )
 initial$z <- rep(0, FITTIMES)
@@ -251,8 +249,6 @@ save(lds_M0_mat,
 ## fixed ----
 fixed <- list(
   "z", "g0", "theta",
-  # "mu",
-  # "sigsq_s",
   "alpha", "gmax"
 )
 initial$z <- rep(1, FITTIMES)

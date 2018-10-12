@@ -1,0 +1,26 @@
+[general]
+creator=R package 'raster'
+created=2018-10-05 04:12:10
+[georeference]
+nrows=1074
+ncols=781
+xmin=377996.34784832
+ymin=-2785489.07920707
+xmax=399942.44784832
+ymax=-2752409.87920707
+projection=+proj=utm +zone=36S +ellps=WGS84
+[data]
+datatype=FLT4S
+byteorder=little
+nbands=1
+bandorder=BIL
+categorical=FALSE
+minvalue=93.6391220092773
+maxvalue=447.815856933594
+nodatavalue=-3.4e+38
+[legend]
+legendtype=
+values=
+color=
+[description]
+layername=elevation

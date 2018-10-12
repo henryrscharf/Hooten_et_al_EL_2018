@@ -1,17 +1,12 @@
 ## libraries ----
-library(smover)
 library(reDyn)
 library(doParallel)
 ## load buffalo data ----
 load("../data/buffalo/buffalo_Cilla.RData")
-# buffalo_proj <- buffalo_proj[buffalo_proj$POSIX > "2005-09-14" &
-#                                buffalo_proj$POSIX < "2005-10-15", ]
-buffalo_proj <- buffalo_proj[buffalo_proj$POSIX > "2005-09-30" &
-                               buffalo_proj$POSIX < "2005-10-15", ]
 obstimes <- as.numeric(buffalo_proj$POSIX) / 3600
-## rasters + sabie river ----
+## DEM + sabie river ----
 ELE_rast <- raster("../data/buffalo/buffaloELE_Cilla.grd")
-load("../data/buffalo/dist2sabie_ext.RData")
+load("../data/buffalo/dist2sabie.RData")
 ## covariates ----
 ## X
 X <- stack(list(
@@ -104,9 +99,7 @@ initial_pr_z <- get_fc_z(mu = initial$mu, sigsq_mu = initial$sigsq_mu, tausq = i
 initial$z <- sapply(initial_pr_z, function(pr_t) sample(1:0, 1, prob = c(pr_t, 1 - pr_t)))
 ## fixed ----
 fixed <- c(
-  # "mu",
-  # "sigsq_s",
-  "alpha", "gmax"
+  "alpha", "gmax" ## used in more general model; held constant here
 )
 ## tuning ----
 tuning_init <- list(
@@ -146,17 +139,6 @@ log_priors <- list(
   "alpha" = function(x) 0,
   "gmax" = function(x) 0
 )
-# ## check variance priors ----
-# layout(matrix(1:3, 1, 3))
-# plot(sqrt(seq(mode_s / 10, mode_s * 10, l=2e2)),
-#      exp(dinvgamma(seq(mode_s / 10, mode_s * 10, l=2e2), alpha_s, beta_s)),
-#      xlab = expression(sigma[s]), ylab = "density", type = "l")
-# plot(sqrt(seq(mode_mu / sqrt(10), mode_mu * 10, l=2e2)),
-#      exp(dinvgamma(seq(mode_mu / 3, mode_mu * 3, l=2e2), alpha_mu, beta_mu)),
-#      xlab = expression(sigma[mu]), ylab = "density", type = "l")
-# plot(sqrt(seq(mode_tau / sqrt(10), mode_tau * 10, l=2e2)),
-#      exp(dinvgamma(seq(mode_tau / 3, mode_tau * 3, l=2e2), alpha_tau, beta_tau)),
-#      xlab = expression(sigma[tau]), ylab = "density", type = "l")
 ## k-fold indicies ----
 set.seed(1)
 nfolds <- 8
@@ -165,10 +147,10 @@ left_over <- pts_per_fold * nfolds - (length(obstimes) - 2)
 holdout_indices <- apply(matrix(c(sample(2:(length(obstimes) - 1), length(obstimes) - 2),
                                   rep(0, left_over)), ncol = nfolds), 2, sort)
 ## N_iterations + other ----
-ncores <- nfolds
+ncores <- nfolds / 2
 data <- list("W" = W_ortho, "gradX" = gradX_scaled, "s" = as.matrix(buffalo_proj@coords),
              "obstimes" = obstimes, "times" = fit_times)
-N_iterations <- 1e5; batch_size <- 2e2; block_updates <- TRUE; alpha_blk_reps <- 5
+N_iterations <- 1e2; batch_size <- 2e2; block_updates <- TRUE; alpha_blk_reps <- 5
 verbose_mcmc <- F; save_tuning_covs <- F; save_gradX <- F; save_W <- F; seed <- 0
 save_out_rate <- N_iterations + 1
 # save_out_rate <- 100
@@ -181,143 +163,143 @@ used_iterations <- seq(N_iterations / 2, N_iterations + 1, 10)
 ## register parallel backend ----
 doParallel::registerDoParallel(ncores)
 ## ----
-# ## start mcmc algorithms for FULL model ----
-# init_time <- Sys.time()
-# out_mcmcs_FULL <- foreach::foreach(holdout = iterators::iter(holdout_indices, by = 'col')) %dopar% {
-#   data$s <- data$s[-holdout, ]
-#   data$obstimes <- data$obstimes[-holdout]
-#   out_mcmc <- reDyn_mcmc(N_iterations = N_iterations, data = data, initial = initial,
-#                          log_priors = log_priors, fixed = fixed, tuning_init = tuning_init,
-#                          batch_size = batch_size, block_updates = block_updates,
-#                          alpha_blk_reps = alpha_blk_reps, verbose_mcmc = verbose_mcmc,
-#                          save_tuning_covs = save_tuning_covs, save_gradX = save_gradX, save_W = save_W,
-#                          save_out_rate = save_out_rate, save_out_file = save_out_file,
-#                          used_iterations = used_iterations, seed = seed)
-# }
-# out_mcmcs_FULL$time_started <- format(init_time, "%Y%m%d_%H%M%S")
-# out_mcmcs_FULL$time_finished <- format(Sys.time(), "%Y%m%d_%H%M%S")
-# class(out_mcmcs_FULL) <- "reDyn_mcmcs"
-# Sys.time() - init_time
-# ## save FULL ----
-# save(out_mcmcs_FULL, X_names, W_names,
-#      W_ortho, X,
-#      log_priors, W_tilde_proj_mat, mean_slopes,
-#      holdout_indices,
-#      file = paste0("../data/buffalo/model_fits/",
-#                    out_mcmcs_FULL$time_finished,
-#                    "_buffalo_Cilla_reDyn_mcmc_FULL.RData"))
-# ## score FULL ----
-# system.time({
-#   lds_FULL <- foreach(i = 1:ncol(holdout_indices)) %dopar% {
-#     get_score(reDyn_mcmc = out_mcmcs_FULL[[i]],
-#               holdout = data$s[holdout_indices[, i], ],
-#               holdout_times = data$obstimes[holdout_indices[, i]])
-#   }
-# })
-# lds_FULL_mat <- matrix(c(unlist(lds_FULL), rep(NA, left_over)), ncol = 8)
-# mean(lds_FULL_mat, na.rm = T)
-# ## save FULL ----
-# save(lds_FULL_mat,
-#      file = paste0("../data/buffalo/model_fits/",
-#                    out_mcmcs_FULL$time_finished,
-#                    "_buffalo_Cilla_reDyn_scores_FULL.RData"))
-# ## ----
-# ## prep SUB model (M0) ----
-# ## fixed ----
-# fixed <- list(
-#   "z", "g0", "theta",
-#   # "mu",
-#   # "sigsq_s",
-#   "alpha", "gmax"
-# )
-# initial$z <- rep(0, FITTIMES)
-# ## start mcmc algorithms for SUB model ----
-# init_time <- Sys.time()
-# out_mcmcs_M0 <- foreach::foreach(holdout = iterators::iter(holdout_indices, by = 'col')) %dopar% {
-#   data$s <- data$s[-holdout, ]
-#   data$obstimes <- data$obstimes[-holdout]
-#   out_mcmc <- reDyn_mcmc(N_iterations = N_iterations, data = data, initial = initial,
-#                          log_priors = log_priors, fixed = fixed, tuning_init = tuning_init,
-#                          batch_size = batch_size, block_updates = block_updates,
-#                          alpha_blk_reps = alpha_blk_reps, verbose_mcmc = verbose_mcmc,
-#                          save_tuning_covs = save_tuning_covs, save_gradX = save_gradX, save_W = save_W,
-#                          save_out_rate = save_out_rate, save_out_file = save_out_file,
-#                          used_iterations = used_iterations, seed = seed)
-# }
-# out_mcmcs_M0$time_started <- format(init_time, "%Y%m%d_%H%M%S")
-# out_mcmcs_M0$time_finished <- format(Sys.time(), "%Y%m%d_%H%M%S")
-# class(out_mcmcs_M0) <- "reDyn_mcmcs"
-# Sys.time() - init_time
-# ## save M0 ----
-# save(out_mcmcs_M0, log_priors,
-#      holdout_indices,
-#      file = paste0("../data/buffalo/model_fits/",
-#                    out_mcmcs_M0$time_finished,
-#                    "_buffalo_Cilla_reDyn_mcmc_M0.RData"))
-# ## score M0 ----
-# system.time({
-#   lds_M0 <- foreach(i = 1:ncol(holdout_indices)) %dopar% {
-#     get_score(reDyn_mcmc = out_mcmcs_M0[[i]],
-#               holdout = data$s[holdout_indices[, i], ],
-#               holdout_times = data$obstimes[holdout_indices[, i]])
-#   }
-# })
-# lds_M0_mat <- matrix(c(unlist(lds_M0), rep(NA, left_over)), ncol = 8)
-# mean(lds_M0_mat, na.rm = T)
-# ## save M0 ----
-# save(lds_M0_mat,
-#      file = paste0("../data/buffalo/model_fits/",
-#                    out_mcmcs_M0$time_finished,
-#                    "_buffalo_Cilla_reDyn_scores_M0.RData"))
-# ## ----
-# ## prep SUB model (M1) ----
-# ## fixed ----
-# fixed <- list(
-#   "z", "g0", "theta",
-#   # "mu",
-#   # "sigsq_s",
-#   "alpha", "gmax"
-# )
-# initial$z <- rep(1, FITTIMES)
-# ## start mcmc algorithms for SUB model ----
-# init_time <- Sys.time()
-# out_mcmcs_M1 <- foreach::foreach(holdout = iterators::iter(holdout_indices, by = 'col')) %dopar% {
-#   data$s <- data$s[-holdout, ]
-#   data$obstimes <- data$obstimes[-holdout]
-#   out_mcmc <- reDyn_mcmc(N_iterations = N_iterations, data = data, initial = initial,
-#                          log_priors = log_priors, fixed = fixed, tuning_init = tuning_init,
-#                          batch_size = batch_size, block_updates = block_updates,
-#                          alpha_blk_reps = alpha_blk_reps, verbose_mcmc = verbose_mcmc,
-#                          save_tuning_covs = save_tuning_covs, save_gradX = save_gradX, save_W = save_W,
-#                          save_out_rate = save_out_rate, save_out_file = save_out_file,
-#                          used_iterations = used_iterations, seed = seed)
-# }
-# out_mcmcs_M1$time_started <- format(init_time, "%Y%m%d_%H%M%S")
-# out_mcmcs_M1$time_finished <- format(Sys.time(), "%Y%m%d_%H%M%S")
-# class(out_mcmcs_M1) <- "reDyn_mcmcs"
-# Sys.time() - init_time
-# ## save M1 ----
-# save(out_mcmcs_M1, X_names, X,
-#      log_priors, mean_slopes, holdout_indices,
-#      file = paste0("../data/buffalo/model_fits/",
-#                    out_mcmcs_M1$time_finished,
-#                    "_buffalo_Cilla_reDyn_mcmc_M1.RData"))
-# ## score M1 ----
-# system.time({
-#   lds_M1 <- foreach(i = 1:ncol(holdout_indices)) %dopar% {
-#     get_score(reDyn_mcmc = out_mcmcs_M1[[i]],
-#               holdout = data$s[holdout_indices[, i], ],
-#               holdout_times = data$obstimes[holdout_indices[, i]])
-#   }
-# })
-# lds_M1_mat <- matrix(c(unlist(lds_M1), rep(NA, left_over)), ncol = 8)
-# mean(lds_M1_mat, na.rm = T)
-# ## save M1 ----
-# save(lds_M1_mat,
-#      file = paste0("../data/buffalo/model_fits/",
-#                    out_mcmcs_M1$time_finished,
-#                    "_buffalo_Cilla_reDyn_scores_M1.RData"))
-# ## ----
+## start mcmc algorithms for FULL model ----
+init_time <- Sys.time()
+out_mcmcs_FULL <- foreach::foreach(holdout = iterators::iter(holdout_indices, by = 'col')) %dopar% {
+  data$s <- data$s[-holdout, ]
+  data$obstimes <- data$obstimes[-holdout]
+  out_mcmc <- reDyn_mcmc(N_iterations = N_iterations, data = data, initial = initial,
+                         log_priors = log_priors, fixed = fixed, tuning_init = tuning_init,
+                         batch_size = batch_size, block_updates = block_updates,
+                         alpha_blk_reps = alpha_blk_reps, verbose_mcmc = verbose_mcmc,
+                         save_tuning_covs = save_tuning_covs, save_gradX = save_gradX, save_W = save_W,
+                         save_out_rate = save_out_rate, save_out_file = save_out_file,
+                         used_iterations = used_iterations, seed = seed)
+}
+out_mcmcs_FULL$time_started <- format(init_time, "%Y%m%d_%H%M%S")
+out_mcmcs_FULL$time_finished <- format(Sys.time(), "%Y%m%d_%H%M%S")
+class(out_mcmcs_FULL) <- "reDyn_mcmcs"
+Sys.time() - init_time
+## save FULL ----
+save(out_mcmcs_FULL, X_names, W_names,
+     W_ortho, X,
+     log_priors, W_tilde_proj_mat, mean_slopes,
+     holdout_indices,
+     file = paste0("../data/buffalo/model_fits/",
+                   out_mcmcs_FULL$time_finished,
+                   "_buffalo_Cilla_reDyn_mcmc_FULL.RData"))
+## score FULL ----
+system.time({
+  lds_FULL <- foreach(i = 1:ncol(holdout_indices)) %dopar% {
+    get_score(reDyn_mcmc = out_mcmcs_FULL[[i]],
+              holdout = data$s[holdout_indices[, i], ],
+              holdout_times = data$obstimes[holdout_indices[, i]])
+  }
+})
+lds_FULL_mat <- matrix(c(unlist(lds_FULL), rep(NA, left_over)), ncol = 8)
+mean(lds_FULL_mat, na.rm = T)
+## save FULL ----
+save(lds_FULL_mat,
+     file = paste0("../data/buffalo/model_fits/",
+                   out_mcmcs_FULL$time_finished,
+                   "_buffalo_Cilla_reDyn_scores_FULL.RData"))
+## ----
+## prep SUB model (M0) ----
+## fixed ----
+fixed <- list(
+  "z", "g0", "theta",
+  # "mu",
+  # "sigsq_s",
+  "alpha", "gmax"
+)
+initial$z <- rep(0, FITTIMES)
+## start mcmc algorithms for SUB model ----
+init_time <- Sys.time()
+out_mcmcs_M0 <- foreach::foreach(holdout = iterators::iter(holdout_indices, by = 'col')) %dopar% {
+  data$s <- data$s[-holdout, ]
+  data$obstimes <- data$obstimes[-holdout]
+  out_mcmc <- reDyn_mcmc(N_iterations = N_iterations, data = data, initial = initial,
+                         log_priors = log_priors, fixed = fixed, tuning_init = tuning_init,
+                         batch_size = batch_size, block_updates = block_updates,
+                         alpha_blk_reps = alpha_blk_reps, verbose_mcmc = verbose_mcmc,
+                         save_tuning_covs = save_tuning_covs, save_gradX = save_gradX, save_W = save_W,
+                         save_out_rate = save_out_rate, save_out_file = save_out_file,
+                         used_iterations = used_iterations, seed = seed)
+}
+out_mcmcs_M0$time_started <- format(init_time, "%Y%m%d_%H%M%S")
+out_mcmcs_M0$time_finished <- format(Sys.time(), "%Y%m%d_%H%M%S")
+class(out_mcmcs_M0) <- "reDyn_mcmcs"
+Sys.time() - init_time
+## save M0 ----
+save(out_mcmcs_M0, log_priors,
+     holdout_indices,
+     file = paste0("../data/buffalo/model_fits/",
+                   out_mcmcs_M0$time_finished,
+                   "_buffalo_Cilla_reDyn_mcmc_M0.RData"))
+## score M0 ----
+system.time({
+  lds_M0 <- foreach(i = 1:ncol(holdout_indices)) %dopar% {
+    get_score(reDyn_mcmc = out_mcmcs_M0[[i]],
+              holdout = data$s[holdout_indices[, i], ],
+              holdout_times = data$obstimes[holdout_indices[, i]])
+  }
+})
+lds_M0_mat <- matrix(c(unlist(lds_M0), rep(NA, left_over)), ncol = 8)
+mean(lds_M0_mat, na.rm = T)
+## save M0 ----
+save(lds_M0_mat,
+     file = paste0("../data/buffalo/model_fits/",
+                   out_mcmcs_M0$time_finished,
+                   "_buffalo_Cilla_reDyn_scores_M0.RData"))
+## ----
+## prep SUB model (M1) ----
+## fixed ----
+fixed <- list(
+  "z", "g0", "theta",
+  # "mu",
+  # "sigsq_s",
+  "alpha", "gmax"
+)
+initial$z <- rep(1, FITTIMES)
+## start mcmc algorithms for SUB model ----
+init_time <- Sys.time()
+out_mcmcs_M1 <- foreach::foreach(holdout = iterators::iter(holdout_indices, by = 'col')) %dopar% {
+  data$s <- data$s[-holdout, ]
+  data$obstimes <- data$obstimes[-holdout]
+  out_mcmc <- reDyn_mcmc(N_iterations = N_iterations, data = data, initial = initial,
+                         log_priors = log_priors, fixed = fixed, tuning_init = tuning_init,
+                         batch_size = batch_size, block_updates = block_updates,
+                         alpha_blk_reps = alpha_blk_reps, verbose_mcmc = verbose_mcmc,
+                         save_tuning_covs = save_tuning_covs, save_gradX = save_gradX, save_W = save_W,
+                         save_out_rate = save_out_rate, save_out_file = save_out_file,
+                         used_iterations = used_iterations, seed = seed)
+}
+out_mcmcs_M1$time_started <- format(init_time, "%Y%m%d_%H%M%S")
+out_mcmcs_M1$time_finished <- format(Sys.time(), "%Y%m%d_%H%M%S")
+class(out_mcmcs_M1) <- "reDyn_mcmcs"
+Sys.time() - init_time
+## save M1 ----
+save(out_mcmcs_M1, X_names, X,
+     log_priors, mean_slopes, holdout_indices,
+     file = paste0("../data/buffalo/model_fits/",
+                   out_mcmcs_M1$time_finished,
+                   "_buffalo_Cilla_reDyn_mcmc_M1.RData"))
+## score M1 ----
+system.time({
+  lds_M1 <- foreach(i = 1:ncol(holdout_indices)) %dopar% {
+    get_score(reDyn_mcmc = out_mcmcs_M1[[i]],
+              holdout = data$s[holdout_indices[, i], ],
+              holdout_times = data$obstimes[holdout_indices[, i]])
+  }
+})
+lds_M1_mat <- matrix(c(unlist(lds_M1), rep(NA, left_over)), ncol = 8)
+mean(lds_M1_mat, na.rm = T)
+## save M1 ----
+save(lds_M1_mat,
+     file = paste0("../data/buffalo/model_fits/",
+                   out_mcmcs_M1$time_finished,
+                   "_buffalo_Cilla_reDyn_scores_M1.RData"))
+## ----
 ## single fit ----
 ## ----
 ## start mcmc algorithm ----

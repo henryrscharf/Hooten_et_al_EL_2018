@@ -193,3 +193,8 @@ text(x = 1:nrow(out_mcmc$chains$theta),
 mtext(text = "b)", side = 1, line = -37.5, at = 0.4, cex = 1.3)
 ## dev.off() ----
 dev.off()
+## ESS ----
+library(coda)
+lapply(out_mcmc$chains[c('sigsq_s', 'sigsq_mu', 'tausq', 'g0', 'beta', 'theta')], function(x){
+  effectiveSize(mcmc(t(x), start = out_mcmc$used_iterations[1], thin = 10))
+})
