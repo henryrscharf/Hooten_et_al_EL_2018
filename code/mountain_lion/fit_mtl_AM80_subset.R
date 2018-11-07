@@ -293,6 +293,10 @@ save(lds_M1_mat,
                    "_mtlAM80_reDyn_scores_M1.RData"))
 ## ----
 ## single fit ----
+## fixed ----
+fixed <- list(
+  "alpha", "gmax" ## used in more general model; held constant here
+)
 ## ----
 ## start mcmc algorithm ----
 system.time({
