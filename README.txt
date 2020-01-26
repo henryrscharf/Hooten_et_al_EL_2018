@@ -4,4 +4,4 @@ Scripts use the functions in the included 'reDyn' R package by Henry Scharf.
 
 The 'reDyn' R package may be installed using the following command in an interactive R session:
 
-install.packages("reDyn_0.5.2.tar.gz", repos = NULL)
+install.packages("reDyn_0.5.3.tar.gz", repos = NULL)
